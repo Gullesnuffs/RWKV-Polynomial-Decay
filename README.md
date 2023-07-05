@@ -47,9 +47,7 @@ $$x^w = \int_{-\infty}^{\infty} f_w(\alpha) e^{- x \exp(\alpha)} \mathrm{d}\alph
 Define $g_w:\mathbb{R}^{+} \rightarrow \mathbb{R}^{+}$ by
 $$g_w(x) = \int_{-\infty}^{\infty} e^{-\alpha w-x\exp(\alpha)} \mathrm{d}\alpha$$
 Then
-$$g_w(x) = \int_{-\infty}^{\infty} e^{-\alpha w-x\exp(\alpha)} \mathrm{d}\alpha = \left[ \begin{aligned}
-&\beta = \alpha + \ln(x) \\ &\mathrm{d} \beta = \mathrm{d} \alpha 
-    \end{aligned} \right] = x^{w} \int_{-\infty}^{\infty} e^{-\beta w-\exp(\beta)} d\beta = x^{w} g_w(1) $$
+$$g_w(x) = \int_{-\infty}^{\infty} e^{-\alpha w-x\exp(\alpha)} \mathrm{d}\alpha = \left[ \beta = \alpha + \ln(x) \right] = x^{w} \int_{-\infty}^{\infty} e^{-\beta w-\exp(\beta)} d\beta = x^{w} g_w(1) $$
 Now define
 $$f_w(\alpha) = \frac{e^{-\alpha w}}{g_w(1)}$$
 and it follows that
