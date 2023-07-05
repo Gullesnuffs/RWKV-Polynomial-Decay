@@ -3,6 +3,8 @@
 ########################################################################################################
 
 import json, math, random, os, sys
+from queue import PriorityQueue
+from string import ascii_lowercase, ascii_uppercase
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -71,6 +73,21 @@ class MyDataset(Dataset):
             self.data_size = -1
             self.data = None
             self.error_count = 0
+        elif args.data_type == "fizzbuzz":
+            alphabet = ascii_uppercase + ascii_lowercase + "0123456789" + "\n"
+            self.vocab_size = len(alphabet)
+            xx = 0
+            xxObj = {}
+            for u in alphabet:
+                xxObj[xx] = u
+                xx += 1
+            with open(f"{args.proj_dir}/vocab.json", "w", encoding="utf-16le") as vocab_file:
+                vocab_file.write(json.dumps(xxObj, ensure_ascii=False))
+            self.data_size = float("inf")
+            rank_zero_info(f"Data has {self.data_size} tokens, {self.vocab_size} vocab size.")
+            self.stoi = {ch: i for i, ch in enumerate(alphabet)}
+            self.itos = {i: ch for i, ch in enumerate(alphabet)}
+            self.data = ""
         else:
             if args.data_type == "dummy":
                 rank_zero_info("Building dummy data...")
@@ -162,52 +179,82 @@ class MyDataset(Dataset):
                 magic_prime = args.magic_prime
                 data = self.data
 
-                if args.my_pile_stage > 0:
-                    ii = 1 + epoch * self.samples_per_epoch + (idx * world_size) + rank
-
-                    if args.my_qa_mask > 0:
-                        ii_orig = ii
-                        if ii % 2 == 0:
-                            ii = -1
-                            data = self.data_pile
+                if args.data_type == "fizzbuzz":
+                    divisor_to_keyword = {}
+                    pq = PriorityQueue()
+                    for _ in range(100):
+                        divisor = math.ceil(math.exp(random.random() * math.log(10000)))
+                        keyword = random.choice("BCDFGHJKLMNPQRSTVWXZ") + random.choice("aeiouy") + "zz"
+                        divisor_to_keyword[divisor] = keyword
+                    for divisor in divisor_to_keyword.keys():
+                        pq.put((divisor, divisor))
+                    data = []
+                    total_len = 0
+                    i = 1
+                    while total_len < 10000:
+                        current_keywords = []
+                        while pq.queue[0][0] == i:
+                            _, divisor = pq.get()
+                            current_keywords.append(divisor_to_keyword[divisor])
+                            pq.put((i + divisor, divisor))
+                        if len(current_keywords) == 0:
+                            data.append(str(i))
                         else:
-                            ii = ii // 2
-                    if data == self.data_pile:
-                        i = np.random.randint(0, self.data_pile_size - req_len)
-                    else:
-                        if args.my_pile_stage == 4 or ii < args.my_random_steps:
-                            # cheat: pick a random spot in dataset
-                            if args.my_pile_version == 1:
-                                i = np.random.randint(0, self.data_size - req_len)
+                            data.append("".join(current_keywords))
+                        total_len += len(data[-1])
+                        i += 1
+                    data = "\n".join(data)
+                    start = random.randint(0, len(data) - req_len)
+                    data = data[start:start + req_len]
+
+                    dix = [self.stoi[s] for s in data[:req_len]]
+                else:
+                    if args.my_pile_stage > 0:
+                        ii = 1 + epoch * self.samples_per_epoch + (idx * world_size) + rank
+
+                        if args.my_qa_mask > 0:
+                            ii_orig = ii
+                            if ii % 2 == 0:
+                                ii = -1
+                                data = self.data_pile
                             else:
-                                i = np.random.randint(0, self.data_size)
+                                ii = ii // 2
+                        if data == self.data_pile:
+                            i = np.random.randint(0, self.data_pile_size - req_len)
                         else:
-                            ii = ii - args.my_random_steps
-                            factor = (math.sqrt(5) - 1) / 2
-                            factor = int(magic_prime * factor)
-                            i = ((factor * ii * ii * ii) % magic_prime) * ctx_len
-                            i = i + args.my_pile_shift
-                    # print(f"epoch {epoch} idx {idx} rank {rank}/{world_size} ii {ii} pos {round(i / self.data_size, 3)}")
-                else:
-                    # cheat: pick a random spot in dataset
-                    i = np.random.randint(0, self.data_size - req_len)
-
-                if args.data_type == "binidx":
-                    if args.my_pile_version == 1:
-                        dix = data.get(idx=0, offset=i, length=req_len).astype(int)
+                            if args.my_pile_stage == 4 or ii < args.my_random_steps:
+                                # cheat: pick a random spot in dataset
+                                if args.my_pile_version == 1:
+                                    i = np.random.randint(0, self.data_size - req_len)
+                                else:
+                                    i = np.random.randint(0, self.data_size)
+                            else:
+                                ii = ii - args.my_random_steps
+                                factor = (math.sqrt(5) - 1) / 2
+                                factor = int(magic_prime * factor)
+                                i = ((factor * ii * ii * ii) % magic_prime) * ctx_len
+                                i = i + args.my_pile_shift
+                        # print(f"epoch {epoch} idx {idx} rank {rank}/{world_size} ii {ii} pos {round(i / self.data_size, 3)}")
                     else:
-                        # self.data : cutoff, chunk_count, data
-                        for j in range(len(data)):
-                            if i < data[j][0]:
-                                ii = i
-                                i = (i - (data[j-1][0] if j > 0 else 0)) % data[j][1]
-                                dix = data[j][2].get(idx=0, offset=i, length=req_len).astype(int)
-                                # print(ii, j, i)
-                                break
-                elif args.data_type == "numpy":
-                    dix = data[i : i + req_len]
-                else:
-                    dix = [self.stoi[s] for s in data[i : i + req_len]]
+                        # cheat: pick a random spot in dataset
+                        i = np.random.randint(0, self.data_size - req_len)
+
+                    if args.data_type == "binidx":
+                        if args.my_pile_version == 1:
+                            dix = data.get(idx=0, offset=i, length=req_len).astype(int)
+                        else:
+                            # self.data : cutoff, chunk_count, data
+                            for j in range(len(data)):
+                                if i < data[j][0]:
+                                    ii = i
+                                    i = (i - (data[j-1][0] if j > 0 else 0)) % data[j][1]
+                                    dix = data[j][2].get(idx=0, offset=i, length=req_len).astype(int)
+                                    # print(ii, j, i)
+                                    break
+                    elif args.data_type == "numpy":
+                        dix = data[i : i + req_len]
+                    else:
+                        dix = [self.stoi[s] for s in data[i : i + req_len]]
 
                 if args.my_qa_mask == 1:
                     if data == self.data_pile:
