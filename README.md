@@ -114,7 +114,7 @@ The training commands I used for the above runs are as follows.
 
 **Exponential decay**
 ```
-python train.py --load_model "" --wandb "" --proj_dir "out" \
+cd RWKV-v4neo & python train.py --load_model "" --wandb "" --proj_dir "out" \
     --data_file "" --data_type "fizzbuzz" --vocab_size 0 \
     --ctx_len 256 --epoch_steps 100 --epoch_count 500 --epoch_begin 0 --epoch_save 10 \
     --micro_bsz 16 --n_layer 6 --n_embd 512 --pre_ffn 0 --head_qk 0 \
@@ -125,7 +125,7 @@ python train.py --load_model "" --wandb "" --proj_dir "out" \
 
 **Polynomial decay**
 ```
-python train.py --load_model "" --wandb "" --proj_dir "out" \
+cd RWKV-v4neo & python train.py --load_model "" --wandb "" --proj_dir "out" \
     --data_file "" --data_type "fizzbuzz" --vocab_size 0 \
     --ctx_len 256 --epoch_steps 100 --epoch_count 500 --epoch_begin 0 --epoch_save 10 \
     --micro_bsz 16 --n_layer 6 --n_embd 512 --pre_ffn 0 --head_qk 0 \
